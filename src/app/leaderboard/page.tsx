@@ -95,7 +95,7 @@ export default async function LeaderboardPage() {
                   {leaderboardData[currentUserRank]?.roi_percentage.toFixed(1)}% ROI
                 </p>
                 <p className="text-sm text-accent">
-                  {leaderboardData[currentUserRank]?.credits.toLocaleString()} credits
+                  {leaderboardData[currentUserRank]?.credits.toLocaleString()} TMX
                 </p>
               </div>
             </div>
@@ -153,7 +153,7 @@ export default async function LeaderboardPage() {
                         {entry.roi_percentage.toFixed(1)}%
                       </p>
                       <p className="text-sm text-accent font-mono">
-                        {entry.credits.toLocaleString()} credits
+                        {entry.credits.toLocaleString()} TMX
                       </p>
                     </div>
                   </div>
