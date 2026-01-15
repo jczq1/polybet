@@ -4,8 +4,8 @@ import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 
 export const metadata: Metadata = {
-  title: 'CMU Predictions - Campus Prediction Markets',
-  description: 'A prediction betting platform for Carnegie Mellon University students to bet on campus events using virtual currency.',
+  title: 'Polymarket - Prediction Markets',
+  description: 'A prediction betting platform to bet on events using TMX virtual currency.',
 }
 
 export default function RootLayout({

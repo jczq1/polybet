@@ -76,7 +76,7 @@ export default async function ProfilePage() {
                 <p className="text-3xl font-bold text-accent">
                   {profile.credits.toLocaleString()}
                 </p>
-                <p className="text-sm text-muted-foreground">Credits</p>
+                <p className="text-sm text-muted-foreground">TMX</p>
               </CardContent>
             </Card>
             <Card>
@@ -125,7 +125,7 @@ export default async function ProfilePage() {
                         </div>
                         <div className="text-right">
                           <p className="font-mono text-foreground">
-                            {bet.amount} credits
+                            {bet.amount} TMX
                           </p>
                           <p className="text-sm text-accent">
                             Potential: {bet.potential_payout}
@@ -199,7 +199,7 @@ export default async function ProfilePage() {
               <CardDescription>
                 {canClaimBonus
                   ? 'Your bonus is ready to claim!'
-                  : 'Come back next month for more credits'
+                  : 'Come back next month for more TMX'
                 }
               </CardDescription>
             </CardHeader>
