@@ -345,31 +345,17 @@ export default function AdminToolsPage() {
     setActionLoading(true)
     const supabase = createClient()
 
-    // Create profile directly as test user
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({
-        id: crypto.randomUUID(),
-        email: testEmail,
-        display_name: testDisplayName,
-        credits: parseInt(testCredits) || 1000,
-        is_admin: false,
-      })
-      .select()
-      .single()
+    // Use RPC function to bypass RLS
+    const { data, error } = await supabase.rpc('create_test_user', {
+      p_email: testEmail,
+      p_display_name: testDisplayName,
+      p_credits: parseInt(testCredits) || 1000,
+    })
 
     if (error) {
       setActionMessage({ type: 'error', text: error.message })
     } else {
-      // Record signup bonus transaction
-      await supabase.from('transactions').insert({
-        user_id: data.id,
-        amount: parseInt(testCredits) || 1000,
-        type: 'signup_bonus',
-        description: 'Test user signup bonus',
-      })
-
-      setActionMessage({ type: 'success', text: `Test user created: ${testDisplayName}. Note: Test users need special auth bypass to login.` })
+      setActionMessage({ type: 'success', text: `Test user created: ${testDisplayName}. Use impersonation to place bets as this user.` })
       setTestEmail('')
       setTestDisplayName('')
       setTestCredits('1000')
