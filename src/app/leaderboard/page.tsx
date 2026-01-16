@@ -10,9 +10,9 @@ interface LeaderboardEntry {
   id: string
   display_name: string
   credits: number
-  total_wagered: number
-  total_won: number
-  roi_percentage: number
+  unresolved_bets: number
+  roi_30day: number
+  roi_lifetime: number
   total_bets: number
 }
 
@@ -53,7 +53,7 @@ export default function LeaderboardPage() {
       // Get all profiles
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, display_name, credits')
+        .select('id, display_name, credits, created_at')
 
       // Get all bets with market status to identify unresolved bets
       const { data: allBets } = await supabase
@@ -62,39 +62,95 @@ export default function LeaderboardPage() {
           user_id,
           amount,
           market_id,
+          created_at,
           markets!inner (status)
         `)
 
-      // Calculate unresolved bet amounts and bet counts per user
+      // Get all transactions to calculate monthly bonuses and historical data
+      const { data: allTransactions } = await supabase
+        .from('transactions')
+        .select('user_id, amount, type, created_at')
+
+      // Calculate data per user
       const unresolvedBetAmounts: Record<string, number> = {}
       const betCounts: Record<string, number> = {}
+      const monthlyBonuses: Record<string, number> = {}
 
-      allBets?.forEach((bet: { user_id: string; amount: number; markets: { status: string } }) => {
-        betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
-        // Add to unresolved if market is not resolved
-        if (bet.markets.status !== 'resolved') {
-          unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
+      // For 30-day ROI: track bets placed and resolved in last 30 days
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
+
+      // Calculate unresolved bets that existed 30 days ago
+      const unresolvedBets30DaysAgo: Record<string, number> = {}
+      const credits30DaysAgo: Record<string, number> = {}
+
+      // Process transactions to get monthly bonuses and calculate 30-day-ago state
+      allTransactions?.forEach((tx: { user_id: string; amount: number; type: string; created_at: string }) => {
+        // Sum up monthly bonuses for lifetime ROI calculation
+        if (tx.type === 'monthly_bonus' || tx.type === 'signup_bonus') {
+          if (tx.type === 'monthly_bonus') {
+            monthlyBonuses[tx.user_id] = (monthlyBonuses[tx.user_id] || 0) + tx.amount
+          }
         }
       })
 
+      // Process bets
+      allBets?.forEach((bet: { user_id: string; amount: number; created_at: string; markets: { status: string } }) => {
+        betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
+
+        // Current unresolved bets
+        if (bet.markets.status !== 'resolved') {
+          unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
+
+          // If bet was placed before 30 days ago and still unresolved, it was unresolved 30 days ago too
+          if (bet.created_at < thirtyDaysAgoStr) {
+            unresolvedBets30DaysAgo[bet.user_id] = (unresolvedBets30DaysAgo[bet.user_id] || 0) + bet.amount
+          }
+        }
+      })
+
+      // Calculate credits 30 days ago by working backwards from transactions
+      // Start with current credits and subtract transactions from last 30 days
+      profiles?.forEach((profile: { id: string; credits: number }) => {
+        let credits30d = profile.credits
+
+        allTransactions?.forEach((tx: { user_id: string; amount: number; created_at: string }) => {
+          if (tx.user_id === profile.id && tx.created_at >= thirtyDaysAgoStr) {
+            // Subtract transactions from last 30 days to get balance 30 days ago
+            credits30d -= tx.amount
+          }
+        })
+
+        credits30DaysAgo[profile.id] = Math.max(0, credits30d)
+      })
+
       // Calculate ROI for each user
-      // Formula: ((current_credits + unresolved_bets) - initial_credits) / initial_credits * 100
-      // Initial credits = 1000 (starting balance for all users)
       const INITIAL_CREDITS = 1000
 
       let data: LeaderboardEntry[] = (profiles || []).map((profile: { id: string; display_name: string; credits: number }) => {
         const currentCredits = profile.credits
         const unresolvedBets = unresolvedBetAmounts[profile.id] || 0
-        const totalValue = currentCredits + unresolvedBets
-        const roi = ((totalValue - INITIAL_CREDITS) / INITIAL_CREDITS) * 100
+        const currentTotalValue = currentCredits + unresolvedBets
+
+        // Lifetime ROI: (current - initial) / initial * 100
+        // Initial = 1000 + monthly bonuses received
+        const totalDeposits = INITIAL_CREDITS + (monthlyBonuses[profile.id] || 0)
+        const lifetimeRoi = ((currentTotalValue - totalDeposits) / totalDeposits) * 100
+
+        // 30-Day ROI: (current - value_30d_ago) / value_30d_ago * 100
+        const value30DaysAgo = (credits30DaysAgo[profile.id] || INITIAL_CREDITS) + (unresolvedBets30DaysAgo[profile.id] || 0)
+        const roi30Day = value30DaysAgo > 0
+          ? ((currentTotalValue - value30DaysAgo) / value30DaysAgo) * 100
+          : 0
 
         return {
           id: profile.id,
           display_name: profile.display_name,
           credits: profile.credits,
-          total_wagered: unresolvedBets,
-          total_won: 0,
-          roi_percentage: roi,
+          unresolved_bets: unresolvedBets,
+          roi_30day: roi30Day,
+          roi_lifetime: lifetimeRoi,
           total_bets: betCounts[profile.id] || 0,
         }
       })
@@ -121,11 +177,13 @@ export default function LeaderboardPage() {
   const sortData = (data: LeaderboardEntry[], criteria: SortBy) => {
     switch (criteria) {
       case '30d_roi':
+        data.sort((a, b) => b.roi_30day - a.roi_30day)
+        break
       case 'lifetime_roi':
-        data.sort((a, b) => b.roi_percentage - a.roi_percentage)
+        data.sort((a, b) => b.roi_lifetime - a.roi_lifetime)
         break
       case 'total_credits':
-        data.sort((a, b) => b.credits - a.credits)
+        data.sort((a, b) => (b.credits + b.unresolved_bets) - (a.credits + a.unresolved_bets))
         break
       case 'total_bets':
         data.sort((a, b) => b.total_bets - a.total_bets)
@@ -199,19 +257,26 @@ export default function LeaderboardPage() {
                   <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">My Status</p>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">ROI</p>
-                      <p className={`text-xl font-bold ${(currentUserStats?.roi_percentage || 0) >= 0 ? 'text-success' : 'text-error'}`}>
-                        {(currentUserStats?.roi_percentage || 0) >= 0 ? '+' : ''}
-                        {(currentUserStats?.roi_percentage || 0).toFixed(1)}%
+                      <p className="text-xs text-muted-foreground">30D ROI</p>
+                      <p className={`text-xl font-bold ${(currentUserStats?.roi_30day || 0) >= 0 ? 'text-success' : 'text-error'}`}>
+                        {(currentUserStats?.roi_30day || 0) >= 0 ? '+' : ''}
+                        {(currentUserStats?.roi_30day || 0).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Lifetime ROI</p>
+                      <p className={`text-lg font-bold ${(currentUserStats?.roi_lifetime || 0) >= 0 ? 'text-success' : 'text-error'}`}>
+                        {(currentUserStats?.roi_lifetime || 0) >= 0 ? '+' : ''}
+                        {(currentUserStats?.roi_lifetime || 0).toFixed(1)}%
                       </p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Total Value</p>
                       <p className="text-xl font-bold text-foreground">
-                        {(currentUser.credits + (currentUserStats?.total_wagered || 0)).toLocaleString()} <span className="text-sm text-accent">credits</span>
+                        {(currentUser.credits + (currentUserStats?.unresolved_bets || 0)).toLocaleString()} <span className="text-sm text-accent">credits</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {currentUser.credits.toLocaleString()} available + {(currentUserStats?.total_wagered || 0).toLocaleString()} in bets
+                        {currentUser.credits.toLocaleString()} available + {(currentUserStats?.unresolved_bets || 0).toLocaleString()} in bets
                       </p>
                     </div>
                   </div>
@@ -271,10 +336,10 @@ export default function LeaderboardPage() {
                     <tr className="border-b border-border">
                       <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Rank</th>
                       <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Predictor</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-primary uppercase tracking-wider">ROI (%)</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Credits</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">In Bets</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Bets</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-primary uppercase tracking-wider">30D ROI</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Value</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Lifetime ROI</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Bets</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -318,20 +383,25 @@ export default function LeaderboardPage() {
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-1">
-                              <svg className={`w-4 h-4 ${entry.roi_percentage >= 0 ? 'text-success' : 'text-error'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={entry.roi_percentage >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
+                              <svg className={`w-4 h-4 ${entry.roi_30day >= 0 ? 'text-success' : 'text-error'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={entry.roi_30day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
                               </svg>
-                              <span className={`font-medium ${entry.roi_percentage >= 0 ? 'text-success' : 'text-error'}`}>
-                                {entry.roi_percentage >= 0 ? '+' : ''}{entry.roi_percentage.toFixed(1)}%
+                              <span className={`font-medium ${entry.roi_30day >= 0 ? 'text-success' : 'text-error'}`}>
+                                {entry.roi_30day >= 0 ? '+' : ''}{entry.roi_30day.toFixed(1)}%
                               </span>
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <span className="font-mono text-foreground">{entry.credits.toLocaleString()}</span>
+                            <span className="font-mono text-foreground">{(entry.credits + entry.unresolved_bets).toLocaleString()}</span>
+                            {entry.unresolved_bets > 0 && (
+                              <span className="text-xs text-muted-foreground ml-1">
+                                ({entry.unresolved_bets.toLocaleString()} in bets)
+                              </span>
+                            )}
                           </td>
                           <td className="py-4 px-4">
-                            <span className="font-mono text-accent">
-                              {entry.total_wagered > 0 ? entry.total_wagered.toLocaleString() : '0'}
+                            <span className={`font-medium ${entry.roi_lifetime >= 0 ? 'text-success' : 'text-error'}`}>
+                              {entry.roi_lifetime >= 0 ? '+' : ''}{entry.roi_lifetime.toFixed(1)}%
                             </span>
                           </td>
                           <td className="py-4 px-4">
