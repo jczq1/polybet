@@ -50,42 +50,54 @@ export default function LeaderboardPage() {
         setCurrentUser(profile)
       }
 
-      // Try to use the view, fallback to manual calculation
-      const { data: viewData, error: viewError } = await supabase
-        .from('leaderboard_30d')
-        .select('*')
-        .limit(100)
+      // Get all profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, credits')
 
-      let data: LeaderboardEntry[] = []
+      // Get all bets with market status to identify unresolved bets
+      const { data: allBets } = await supabase
+        .from('bets')
+        .select(`
+          user_id,
+          amount,
+          market_id,
+          markets!inner (status)
+        `)
 
-      if (viewData && !viewError) {
-        data = viewData.map(v => ({ ...v, total_bets: v.total_bets || 0 }))
-      } else {
-        // Fallback: get profiles and calculate
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, credits')
+      // Calculate unresolved bet amounts and bet counts per user
+      const unresolvedBetAmounts: Record<string, number> = {}
+      const betCounts: Record<string, number> = {}
 
-        // Get bet counts per user
-        const { data: bets } = await supabase
-          .from('bets')
-          .select('user_id')
+      allBets?.forEach((bet: { user_id: string; amount: number; markets: { status: string } }) => {
+        betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
+        // Add to unresolved if market is not resolved
+        if (bet.markets.status !== 'resolved') {
+          unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
+        }
+      })
 
-        const betCounts: Record<string, number> = {}
-        bets?.forEach(bet => {
-          betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
-        })
+      // Calculate ROI for each user
+      // Formula: ((current_credits + unresolved_bets) - initial_credits) / initial_credits * 100
+      // Initial credits = 1000 (starting balance for all users)
+      const INITIAL_CREDITS = 1000
 
-        data = (profiles || []).map((profile: { id: string; display_name: string; credits: number }) => ({
+      let data: LeaderboardEntry[] = (profiles || []).map((profile: { id: string; display_name: string; credits: number }) => {
+        const currentCredits = profile.credits
+        const unresolvedBets = unresolvedBetAmounts[profile.id] || 0
+        const totalValue = currentCredits + unresolvedBets
+        const roi = ((totalValue - INITIAL_CREDITS) / INITIAL_CREDITS) * 100
+
+        return {
           id: profile.id,
           display_name: profile.display_name,
           credits: profile.credits,
-          total_wagered: 0,
+          total_wagered: unresolvedBets,
           total_won: 0,
-          roi_percentage: 0,
+          roi_percentage: roi,
           total_bets: betCounts[profile.id] || 0,
-        }))
-      }
+        }
+      })
 
       // Sort based on selected criteria
       sortData(data, sortBy)
@@ -187,16 +199,19 @@ export default function LeaderboardPage() {
                   <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">My Status</p>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">30D ROI</p>
+                      <p className="text-xs text-muted-foreground">ROI</p>
                       <p className={`text-xl font-bold ${(currentUserStats?.roi_percentage || 0) >= 0 ? 'text-success' : 'text-error'}`}>
                         {(currentUserStats?.roi_percentage || 0) >= 0 ? '+' : ''}
                         {(currentUserStats?.roi_percentage || 0).toFixed(1)}%
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Total Wealth</p>
+                      <p className="text-xs text-muted-foreground">Total Value</p>
                       <p className="text-xl font-bold text-foreground">
-                        {currentUser.credits.toLocaleString()} <span className="text-sm text-accent">credits</span>
+                        {(currentUser.credits + (currentUserStats?.total_wagered || 0)).toLocaleString()} <span className="text-sm text-accent">credits</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {currentUser.credits.toLocaleString()} available + {(currentUserStats?.total_wagered || 0).toLocaleString()} in bets
                       </p>
                     </div>
                   </div>
@@ -256,10 +271,10 @@ export default function LeaderboardPage() {
                     <tr className="border-b border-border">
                       <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Rank</th>
                       <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Predictor</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-primary uppercase tracking-wider">30D ROI (%)</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-primary uppercase tracking-wider">ROI (%)</th>
                       <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Credits</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Lifetime ROI</th>
-                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Bets</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">In Bets</th>
+                      <th className="text-left py-4 px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Bets</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -313,11 +328,10 @@ export default function LeaderboardPage() {
                           </td>
                           <td className="py-4 px-4">
                             <span className="font-mono text-foreground">{entry.credits.toLocaleString()}</span>
-                            <span className="text-xs text-accent ml-1">credits</span>
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`font-medium ${entry.roi_percentage >= 0 ? 'text-success' : 'text-error'}`}>
-                              {entry.roi_percentage >= 0 ? '+' : ''}{entry.roi_percentage.toFixed(0)}%
+                            <span className="font-mono text-accent">
+                              {entry.total_wagered > 0 ? entry.total_wagered.toLocaleString() : '0'}
                             </span>
                           </td>
                           <td className="py-4 px-4">
