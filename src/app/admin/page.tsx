@@ -136,7 +136,7 @@ export default async function AdminPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
         <Link href="/admin/markets/new">
           <Card hover className="h-full">
             <CardHeader>
@@ -171,6 +171,24 @@ export default async function AdminPage() {
                   ? `${pendingResolution} market${pendingResolution > 1 ? 's' : ''} awaiting resolution`
                   : 'No markets pending resolution'
                 }
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        <Link href="/admin/users">
+          <Card hover className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                Manage Users
+              </CardTitle>
+              <CardDescription>
+                Add users, adjust credits, and manage admins
               </CardDescription>
             </CardHeader>
           </Card>
