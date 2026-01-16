@@ -109,7 +109,7 @@ export default async function MarketPage({ params }: MarketPageProps) {
                 <div>
                   <p className="text-muted-foreground">Total Pool</p>
                   <p className="text-accent font-medium font-mono">
-                    {totalPool.toLocaleString()} credits
+                    {totalPool.toLocaleString()} TMX
                   </p>
                 </div>
                 <div>
@@ -178,26 +178,16 @@ export default async function MarketPage({ params }: MarketPageProps) {
                             </p>
                             {userBet && (
                               <p className="text-xs text-accent">
-                                Your bet: {userBet.amount} credits @ {formatProbability(userBet.odds_at_purchase)}
-                                {option.is_winner && (
-                                  <span className="text-success ml-1">
-                                    → Won {userBet.potential_payout} credits
-                                  </span>
-                                )}
+                                Your bet: {userBet.amount} TMX
                               </p>
                             )}
                           </div>
                         </div>
 
                         <div className="text-right">
-                          <div className="flex items-center gap-3 justify-end">
-                            <span className="text-sm text-muted-foreground">
-                              {formatProbability(probability)}
-                            </span>
-                            <span className="text-sm font-mono text-accent font-medium">
-                              {formatDecimalOdds(decimalOdds)}
-                            </span>
-                          </div>
+                          <p className="text-sm font-mono text-foreground">
+                            {optionPool.toLocaleString()} TMX
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {(option.total_pool || 0).toLocaleString()} credits
                           </p>
@@ -236,7 +226,7 @@ export default async function MarketPage({ params }: MarketPageProps) {
           <BettingPanel
             market={market}
             options={market.market_options || []}
-            userCredits={userProfile?.credits || 0}
+            userCredits={userProfile?.TMX || 0}
             userId={user?.id}
             canBet={!!canBet}
             existingBets={userBets}

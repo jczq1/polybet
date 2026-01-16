@@ -38,7 +38,7 @@ export function ClaimBonusButton({ canClaim, userId }: ClaimBonusButtonProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-success font-medium">+200 credits claimed!</p>
+        <p className="text-success font-medium">+200 TMX claimed!</p>
       </div>
     )
   }
