@@ -325,10 +325,10 @@ export function BettingPanel({
             <p className="text-sm font-medium text-accent mb-2">
               Your existing bets on this market:
             </p>
-            {existingBets.map((bet) => {
+            {existingBets.map((bet, index) => {
               const option = options.find(o => o.id === bet.option_id)
               return (
-                <div key={bet.option_id} className="flex justify-between text-sm">
+                <div key={`${bet.option_id}-${index}`} className="flex justify-between text-sm">
                   <span className="text-foreground">{option?.option_text}</span>
                   <div>
                     <span className="font-mono text-foreground">{bet.amount}</span>
