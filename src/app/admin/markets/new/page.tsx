@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { normalizeProbabilities, formatDecimalOdds } from '@/lib/oddsCalculator'
 
 const CATEGORIES = [
   'Sports',
@@ -19,6 +20,11 @@ const CATEGORIES = [
   'Other',
 ]
 
+interface OptionWithOdds {
+  text: string
+  probability: number // 0-100 as percentage for easier input
+}
+
 export default function NewMarketPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -28,24 +34,54 @@ export default function NewMarketPage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState(CATEGORIES[0])
   const [closesAt, setClosesAt] = useState('')
-  const [options, setOptions] = useState(['', ''])
+  const [options, setOptions] = useState<OptionWithOdds[]>([
+    { text: '', probability: 50 },
+    { text: '', probability: 50 },
+  ])
+
+  // Calculate total probability
+  const totalProbability = options.reduce((sum, opt) => sum + opt.probability, 0)
+  const isProbabilityValid = Math.abs(totalProbability - 100) < 1
 
   const addOption = () => {
     if (options.length < 10) {
-      setOptions([...options, ''])
+      // Distribute remaining probability to new option
+      const remaining = Math.max(0, 100 - totalProbability)
+      setOptions([...options, { text: '', probability: remaining || 10 }])
     }
   }
 
   const removeOption = (index: number) => {
     if (options.length > 2) {
-      setOptions(options.filter((_, i) => i !== index))
+      const newOptions = options.filter((_, i) => i !== index)
+      setOptions(newOptions)
     }
   }
 
-  const updateOption = (index: number, value: string) => {
+  const updateOptionText = (index: number, text: string) => {
     const newOptions = [...options]
-    newOptions[index] = value
+    newOptions[index].text = text
     setOptions(newOptions)
+  }
+
+  const updateOptionProbability = (index: number, probability: number) => {
+    const newOptions = [...options]
+    newOptions[index].probability = Math.max(5, Math.min(95, probability))
+    setOptions(newOptions)
+  }
+
+  const distributeEvenly = () => {
+    const evenProb = 100 / options.length
+    setOptions(options.map(opt => ({ ...opt, probability: evenProb })))
+  }
+
+  const normalizeOdds = () => {
+    const probs = options.map(o => o.probability)
+    const normalized = normalizeProbabilities(probs)
+    setOptions(options.map((opt, i) => ({
+      ...opt,
+      probability: Math.round(normalized[i] * 100 * 10) / 10
+    })))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,9 +108,15 @@ export default function NewMarketPage() {
       return
     }
 
-    const validOptions = options.filter(o => o.trim())
+    const validOptions = options.filter(o => o.text.trim())
     if (validOptions.length < 2) {
       setError('At least 2 options are required')
+      setLoading(false)
+      return
+    }
+
+    if (!isProbabilityValid) {
+      setError('Probabilities must sum to 100%')
       setLoading(false)
       return
     }
@@ -89,7 +131,7 @@ export default function NewMarketPage() {
       return
     }
 
-    // Create market
+    // Create market with initial stats
     const { data: market, error: marketError } = await supabase
       .from('markets')
       .insert({
@@ -98,6 +140,8 @@ export default function NewMarketPage() {
         category,
         created_by: user.id,
         closes_at: new Date(closesAt).toISOString(),
+        total_bets: 0,
+        unique_bettors: 0,
       })
       .select()
       .single()
@@ -108,10 +152,17 @@ export default function NewMarketPage() {
       return
     }
 
-    // Create options
-    const optionsToInsert = validOptions.map(option => ({
+    // Normalize probabilities to ensure they sum to 1
+    const probs = validOptions.map(o => o.probability)
+    const normalizedProbs = normalizeProbabilities(probs)
+
+    // Create options with initial odds
+    const optionsToInsert = validOptions.map((option, index) => ({
       market_id: market.id,
-      option_text: option.trim(),
+      option_text: option.text.trim(),
+      initial_probability: normalizedProbs[index],
+      current_probability: normalizedProbs[index],
+      total_pool: 0,
     }))
 
     const { error: optionsError } = await supabase
@@ -142,7 +193,7 @@ export default function NewMarketPage() {
           Back to Admin
         </Link>
         <h1 className="text-3xl font-bold text-foreground">Create New Market</h1>
-        <p className="text-muted-foreground">Set up a new prediction market for users</p>
+        <p className="text-muted-foreground">Set up a new prediction market with initial odds</p>
       </div>
 
       <Card>
@@ -150,7 +201,7 @@ export default function NewMarketPage() {
           <CardHeader>
             <CardTitle>Market Details</CardTitle>
             <CardDescription>
-              Define the prediction market and its options
+              Define the prediction market, options, and initial odds
             </CardDescription>
           </CardHeader>
 
@@ -209,22 +260,66 @@ export default function NewMarketPage() {
               />
             </div>
 
-            {/* Options */}
+            {/* Options with Odds */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Options
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-foreground">
+                  Options &amp; Initial Odds
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={distributeEvenly}
+                  >
+                    Even Split
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={normalizeOdds}
+                  >
+                    Normalize
+                  </Button>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground mb-3">
-                Add the possible outcomes for this market (2-10 options)
+                Set the initial probability (odds) for each outcome. Total must equal 100%.
               </p>
+
               <div className="space-y-3">
                 {options.map((option, index) => (
                   <div key={index} className="flex items-center gap-2">
-                    <Input
-                      placeholder={`Option ${index + 1}`}
-                      value={option}
-                      onChange={(e) => updateOption(index, e.target.value)}
-                    />
+                    <div className="flex-1">
+                      <Input
+                        placeholder={`Option ${index + 1}`}
+                        value={option.text}
+                        onChange={(e) => updateOptionText(index, e.target.value)}
+                      />
+                    </div>
+                    <div className="w-24">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={5}
+                          max={95}
+                          step={0.1}
+                          value={option.probability}
+                          onChange={(e) => updateOptionProbability(index, parseFloat(e.target.value) || 0)}
+                          className="w-full h-10 px-3 pr-8 rounded-lg bg-secondary border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 text-right"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-16 text-center">
+                      <span className="text-sm text-accent font-mono">
+                        {formatDecimalOdds(100 / option.probability)}
+                      </span>
+                    </div>
                     {options.length > 2 && (
                       <button
                         type="button"
@@ -239,6 +334,28 @@ export default function NewMarketPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Probability Total Indicator */}
+              <div className={`mt-3 p-3 rounded-lg border ${
+                isProbabilityValid
+                  ? 'bg-success/10 border-success/30'
+                  : 'bg-warning/10 border-warning/30'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${
+                    isProbabilityValid ? 'text-success' : 'text-warning'
+                  }`}>
+                    Total Probability
+                  </span>
+                  <span className={`text-sm font-mono ${
+                    isProbabilityValid ? 'text-success' : 'text-warning'
+                  }`}>
+                    {totalProbability.toFixed(1)}%
+                    {!isProbabilityValid && ` (need 100%)`}
+                  </span>
+                </div>
+              </div>
+
               {options.length < 10 && (
                 <Button
                   type="button"
@@ -255,6 +372,23 @@ export default function NewMarketPage() {
               )}
             </div>
 
+            {/* Info Box */}
+            <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-medium text-accent text-sm">How Odds Work</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Initial odds are set by you and will dynamically adjust as users place bets.
+                    The AMM algorithm uses virtual liquidity that decays with betting volume,
+                    making odds more responsive as more unique users participate.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {error && (
               <div className="p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm">
                 {error}
@@ -266,7 +400,7 @@ export default function NewMarketPage() {
             <Link href="/admin">
               <Button type="button" variant="ghost">Cancel</Button>
             </Link>
-            <Button type="submit" loading={loading}>
+            <Button type="submit" loading={loading} disabled={!isProbabilityValid}>
               Create Market
             </Button>
           </CardFooter>

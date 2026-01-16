@@ -68,9 +68,9 @@ export default function ResolvePage({ params }: ResolvePageProps) {
         .eq('id', marketId)
     }
 
-    // Resolve the market
+    // Resolve the market using the odds-aware function
     const { error: resolveError } = await supabase
-      .rpc('resolve_market', {
+      .rpc('resolve_market_with_odds', {
         p_market_id: marketId,
         p_winning_option_id: selectedOption,
       })

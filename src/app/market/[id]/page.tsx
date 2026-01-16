@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BettingPanel } from '@/components/markets/betting-panel'
+import { formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
 
 interface MarketPageProps {
   params: Promise<{ id: string }>
@@ -30,7 +31,7 @@ export default async function MarketPage({ params }: MarketPageProps) {
 
   // Get user's profile if logged in
   let userProfile = null
-  let userBets: { option_id: string; amount: number }[] = []
+  let userBets: { option_id: string; amount: number; odds_at_purchase: number; potential_payout: number }[] = []
 
   if (user) {
     const { data: profile } = await supabase
@@ -43,25 +44,15 @@ export default async function MarketPage({ params }: MarketPageProps) {
 
     const { data: bets } = await supabase
       .from('bets')
-      .select('option_id, amount')
+      .select('option_id, amount, odds_at_purchase, potential_payout')
       .eq('user_id', user.id)
       .eq('market_id', id)
 
     userBets = bets || []
   }
 
-  // Get betting statistics for each option
-  const { data: allBets } = await supabase
-    .from('bets')
-    .select('option_id, amount')
-    .eq('market_id', id)
-
-  const totalPool = allBets?.reduce((sum, bet) => sum + bet.amount, 0) || 0
-  const optionPools: Record<string, number> = {}
-
-  allBets?.forEach((bet) => {
-    optionPools[bet.option_id] = (optionPools[bet.option_id] || 0) + bet.amount
-  })
+  // Calculate total pool from market options
+  const totalPool = market.market_options?.reduce((sum: number, opt: { total_pool: number }) => sum + (opt.total_pool || 0), 0) || 0
 
   const getStatusBadge = () => {
     switch (market.status) {
@@ -121,26 +112,32 @@ export default async function MarketPage({ params }: MarketPageProps) {
                     {totalPool.toLocaleString()} credits
                   </p>
                 </div>
+                <div>
+                  <p className="text-muted-foreground">Bets</p>
+                  <p className="text-foreground font-medium">
+                    {market.total_bets || 0} ({market.unique_bettors || 0} unique)
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Options */}
+          {/* Options with Odds */}
           <Card>
             <CardHeader>
-              <CardTitle>Options</CardTitle>
+              <CardTitle>Options & Odds</CardTitle>
               <CardDescription>
                 {market.status === 'resolved'
                   ? 'Final results'
-                  : 'Select an option to place your bet'
+                  : 'Current probability and odds for each outcome'
                 }
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {market.market_options?.map((option: { id: string; option_text: string; is_winner: boolean | null }) => {
-                  const optionPool = optionPools[option.id] || 0
-                  const percentage = totalPool > 0 ? (optionPool / totalPool) * 100 : 0
+                {market.market_options?.map((option: { id: string; option_text: string; is_winner: boolean | null; current_probability: number; total_pool: number }) => {
+                  const probability = option.current_probability || 0.5
+                  const decimalOdds = 1 / probability
                   const userBet = userBets.find(b => b.option_id === option.id)
 
                   return (
@@ -161,7 +158,7 @@ export default async function MarketPage({ params }: MarketPageProps) {
                             ? 'bg-success/20'
                             : 'bg-primary/10'
                         }`}
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${probability * 100}%` }}
                       />
 
                       <div className="relative p-4 flex items-center justify-between">
@@ -181,18 +178,28 @@ export default async function MarketPage({ params }: MarketPageProps) {
                             </p>
                             {userBet && (
                               <p className="text-xs text-accent">
-                                Your bet: {userBet.amount} credits
+                                Your bet: {userBet.amount} credits @ {formatProbability(userBet.odds_at_purchase)}
+                                {option.is_winner && (
+                                  <span className="text-success ml-1">
+                                    → Won {userBet.potential_payout} credits
+                                  </span>
+                                )}
                               </p>
                             )}
                           </div>
                         </div>
 
                         <div className="text-right">
-                          <p className="text-sm font-mono text-foreground">
-                            {optionPool.toLocaleString()} credits
-                          </p>
+                          <div className="flex items-center gap-3 justify-end">
+                            <span className="text-sm text-muted-foreground">
+                              {formatProbability(probability)}
+                            </span>
+                            <span className="text-sm font-mono text-accent font-medium">
+                              {formatDecimalOdds(decimalOdds)}
+                            </span>
+                          </div>
                           <p className="text-xs text-muted-foreground">
-                            {percentage.toFixed(1)}%
+                            {(option.total_pool || 0).toLocaleString()} credits
                           </p>
                         </div>
                       </div>
@@ -202,6 +209,26 @@ export default async function MarketPage({ params }: MarketPageProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* How Odds Work Info */}
+          {market.status === 'open' && (
+            <Card>
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="font-medium text-foreground text-sm">Dynamic Odds</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Odds update automatically as bets come in. Your payout is locked at the odds shown when you place your bet.
+                      Early bettors who correctly predict unlikely outcomes earn higher returns.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Sidebar - Betting Panel */}
@@ -211,8 +238,6 @@ export default async function MarketPage({ params }: MarketPageProps) {
             options={market.market_options || []}
             userCredits={userProfile?.credits || 0}
             userId={user?.id}
-            totalPool={totalPool}
-            optionPools={optionPools}
             canBet={!!canBet}
             existingBets={userBets}
           />

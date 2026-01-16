@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { calculatePotentialPayout, formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
 import type { Market, MarketOption } from '@/types/database'
 
 interface BettingPanelProps {
@@ -14,10 +15,8 @@ interface BettingPanelProps {
   options: MarketOption[]
   userCredits: number
   userId?: string
-  totalPool: number
-  optionPools: Record<string, number>
   canBet: boolean
-  existingBets: { option_id: string; amount: number }[]
+  existingBets: { option_id: string; amount: number; odds_at_purchase?: number; potential_payout?: number }[]
 }
 
 export function BettingPanel({
@@ -25,8 +24,6 @@ export function BettingPanel({
   options,
   userCredits,
   userId,
-  totalPool,
-  optionPools,
   canBet,
   existingBets,
 }: BettingPanelProps) {
@@ -39,20 +36,14 @@ export function BettingPanel({
 
   const betAmount = parseInt(amount) || 0
 
-  // Calculate potential payout
-  const calculatePayout = () => {
-    if (!selectedOption || betAmount <= 0) return 0
+  // Get current probability for selected option
+  const selectedOptionData = options.find(o => o.id === selectedOption)
+  const currentProbability = selectedOptionData?.current_probability || 0.5
 
-    const currentOptionPool = optionPools[selectedOption] || 0
-    const newTotalPool = totalPool + betAmount
-    const newOptionPool = currentOptionPool + betAmount
-
-    if (newOptionPool <= 0) return newTotalPool
-
-    return Math.floor((betAmount * newTotalPool) / newOptionPool)
-  }
-
-  const potentialPayout = calculatePayout()
+  // Calculate potential payout using odds-based formula
+  const potentialPayout = selectedOption && betAmount > 0
+    ? calculatePotentialPayout(betAmount, currentProbability)
+    : 0
 
   const handleBet = async () => {
     if (!selectedOption || betAmount <= 0 || !userId) return
@@ -62,8 +53,9 @@ export function BettingPanel({
 
     const supabase = createClient()
 
-    const { error: betError } = await supabase
-      .rpc('place_bet', {
+    // Use the new odds-aware betting function
+    const { data, error: betError } = await supabase
+      .rpc('place_bet_with_odds', {
         p_user_id: userId,
         p_market_id: market.id,
         p_option_id: selectedOption,
@@ -98,6 +90,9 @@ export function BettingPanel({
             You bet {betAmount} credits on{' '}
             {options.find(o => o.id === selectedOption)?.option_text}
           </p>
+          <p className="text-sm text-accent mt-2">
+            Locked at {formatProbability(currentProbability)} odds
+          </p>
         </CardContent>
       </Card>
     )
@@ -122,13 +117,26 @@ export function BettingPanel({
               <p className="text-sm text-muted-foreground mb-2">Your bets:</p>
               {existingBets.map((bet) => {
                 const option = options.find(o => o.id === bet.option_id)
+                const isWinner = option?.is_winner
                 return (
-                  <div key={bet.option_id} className="flex justify-between text-sm">
-                    <span className={option?.is_winner ? 'text-success' : 'text-foreground'}>
+                  <div key={bet.option_id} className="flex justify-between text-sm mb-1">
+                    <span className={isWinner ? 'text-success' : 'text-foreground'}>
                       {option?.option_text}
-                      {option?.is_winner && ' ✓'}
+                      {isWinner && ' ✓'}
                     </span>
-                    <span className="font-mono">{bet.amount}</span>
+                    <div className="text-right">
+                      <span className="font-mono">{bet.amount}</span>
+                      {bet.odds_at_purchase && (
+                        <span className="text-muted-foreground text-xs ml-2">
+                          @ {formatProbability(bet.odds_at_purchase)}
+                        </span>
+                      )}
+                      {isWinner && bet.potential_payout && (
+                        <span className="text-success ml-2">
+                          → {bet.potential_payout}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -175,7 +183,14 @@ export function BettingPanel({
                 return (
                   <div key={bet.option_id} className="flex justify-between text-sm">
                     <span>{option?.option_text}</span>
-                    <span className="font-mono">{bet.amount}</span>
+                    <div>
+                      <span className="font-mono">{bet.amount}</span>
+                      {bet.odds_at_purchase && (
+                        <span className="text-muted-foreground text-xs ml-2">
+                          @ {formatProbability(bet.odds_at_purchase)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -199,7 +214,7 @@ export function BettingPanel({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Option Selection */}
+        {/* Option Selection with Odds */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">
             Select outcome
@@ -207,8 +222,8 @@ export function BettingPanel({
           <div className="space-y-2">
             {options.map((option) => {
               const isSelected = selectedOption === option.id
-              const optionPool = optionPools[option.id] || 0
-              const percentage = totalPool > 0 ? (optionPool / totalPool) * 100 : 0
+              const probability = option.current_probability || 0.5
+              const decimalOdds = 1 / probability
 
               return (
                 <button
@@ -224,9 +239,23 @@ export function BettingPanel({
                     <span className={`font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                       {option.option_text}
                     </span>
-                    <span className="text-sm text-muted-foreground">
-                      {percentage.toFixed(0)}%
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        {formatProbability(probability)}
+                      </span>
+                      <span className={`text-sm font-mono ${isSelected ? 'text-primary' : 'text-accent'}`}>
+                        {formatDecimalOdds(decimalOdds)}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Probability bar */}
+                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        isSelected ? 'bg-primary' : 'bg-accent/50'
+                      }`}
+                      style={{ width: `${probability * 100}%` }}
+                    />
                   </div>
                 </button>
               )
@@ -266,9 +295,15 @@ export function BettingPanel({
           </div>
         </div>
 
-        {/* Potential Payout */}
+        {/* Potential Payout - with locked odds display */}
         {selectedOption && betAmount > 0 && (
           <div className="p-4 rounded-lg bg-secondary border border-border">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-muted-foreground">Your odds (locked at purchase)</span>
+              <span className="text-accent font-mono">
+                {formatProbability(currentProbability)} ({formatDecimalOdds(1/currentProbability)})
+              </span>
+            </div>
             <div className="flex justify-between text-sm mb-1">
               <span className="text-muted-foreground">Potential payout</span>
               <span className="text-success font-mono font-medium">
@@ -295,7 +330,14 @@ export function BettingPanel({
               return (
                 <div key={bet.option_id} className="flex justify-between text-sm">
                   <span className="text-foreground">{option?.option_text}</span>
-                  <span className="font-mono text-foreground">{bet.amount}</span>
+                  <div>
+                    <span className="font-mono text-foreground">{bet.amount}</span>
+                    {bet.odds_at_purchase && (
+                      <span className="text-muted-foreground text-xs ml-2">
+                        @ {formatProbability(bet.odds_at_purchase)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}

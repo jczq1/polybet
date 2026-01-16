@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
 
 export default async function MarketsPage() {
   const supabase = await createClient()
@@ -53,23 +54,34 @@ export default async function MarketsPage() {
             {market.description}
           </p>
 
-          {/* Options Preview */}
+          {/* Options Preview with Odds */}
           <div className="space-y-2 mb-4">
-            {market.market_options?.slice(0, 3).map((option: { id: string; option_text: string; is_winner: boolean | null }) => (
-              <div
-                key={option.id}
-                className={`text-sm px-3 py-2 rounded-lg ${
-                  option.is_winner
-                    ? 'bg-success/20 text-success border border-success/30'
-                    : option.is_winner === false
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-secondary text-foreground'
-                }`}
-              >
-                {option.option_text}
-                {option.is_winner && ' ✓'}
-              </div>
-            ))}
+            {market.market_options?.slice(0, 3).map((option: { id: string; option_text: string; is_winner: boolean | null; current_probability?: number }) => {
+              const probability = option.current_probability || 0.5
+              const decimalOdds = 1 / probability
+              return (
+                <div
+                  key={option.id}
+                  className={`text-sm px-3 py-2 rounded-lg flex justify-between items-center ${
+                    option.is_winner
+                      ? 'bg-success/20 text-success border border-success/30'
+                      : option.is_winner === false
+                      ? 'bg-muted text-muted-foreground'
+                      : 'bg-secondary text-foreground'
+                  }`}
+                >
+                  <span>
+                    {option.option_text}
+                    {option.is_winner && ' ✓'}
+                  </span>
+                  {!option.is_winner && option.is_winner !== false && (
+                    <span className="text-xs font-mono text-accent">
+                      {formatDecimalOdds(decimalOdds)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
             {(market.market_options?.length || 0) > 3 && (
               <p className="text-xs text-muted-foreground">
                 +{(market.market_options?.length || 0) - 3} more options
