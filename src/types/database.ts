@@ -52,6 +52,8 @@ export interface Database {
           closes_at: string
           resolved_at: string | null
           created_at: string
+          total_bets: number
+          unique_bettors: number
         }
         Insert: {
           id?: string
@@ -63,6 +65,8 @@ export interface Database {
           closes_at: string
           resolved_at?: string | null
           created_at?: string
+          total_bets?: number
+          unique_bettors?: number
         }
         Update: {
           id?: string
@@ -74,6 +78,8 @@ export interface Database {
           closes_at?: string
           resolved_at?: string | null
           created_at?: string
+          total_bets?: number
+          unique_bettors?: number
         }
       }
       market_options: {
@@ -83,6 +89,9 @@ export interface Database {
           option_text: string
           is_winner: boolean | null
           created_at: string
+          initial_probability: number
+          current_probability: number
+          total_pool: number
         }
         Insert: {
           id?: string
@@ -90,6 +99,9 @@ export interface Database {
           option_text: string
           is_winner?: boolean | null
           created_at?: string
+          initial_probability?: number
+          current_probability?: number
+          total_pool?: number
         }
         Update: {
           id?: string
@@ -97,6 +109,9 @@ export interface Database {
           option_text?: string
           is_winner?: boolean | null
           created_at?: string
+          initial_probability?: number
+          current_probability?: number
+          total_pool?: number
         }
       }
       bets: {
@@ -107,6 +122,7 @@ export interface Database {
           option_id: string
           amount: number
           potential_payout: number
+          odds_at_purchase: number
           created_at: string
         }
         Insert: {
@@ -116,6 +132,7 @@ export interface Database {
           option_id: string
           amount: number
           potential_payout: number
+          odds_at_purchase: number
           created_at?: string
         }
         Update: {
@@ -125,6 +142,7 @@ export interface Database {
           option_id?: string
           amount?: number
           potential_payout?: number
+          odds_at_purchase?: number
           created_at?: string
         }
       }

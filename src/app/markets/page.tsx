@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
 
 export default async function MarketsPage() {
   const supabase = await createClient()
