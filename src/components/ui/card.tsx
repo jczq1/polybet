@@ -11,7 +11,7 @@ export function Card({ children, className = '', hover = false, glow = false }: 
   return (
     <div
       className={`
-        bg-card rounded-xl border border-border p-6
+        bg-card rounded-xl border border-border p-4
         ${hover ? 'transition-all duration-200 hover:border-primary/50 hover:bg-card/80' : ''}
         ${glow ? 'glow' : ''}
         ${className}

@@ -87,7 +87,7 @@ export function BettingPanel({
           </div>
           <h3 className="text-lg font-semibold text-foreground mb-2">Bet Placed!</h3>
           <p className="text-muted-foreground">
-            You bet {betAmount} credits on{' '}
+            You bet {betAmount} TMX on{' '}
             {options.find(o => o.id === selectedOption)?.option_text}
           </p>
           <p className="text-sm text-accent mt-2">
@@ -208,7 +208,7 @@ export function BettingPanel({
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Your balance:</span>
           <span className="text-accent font-mono font-medium">
-            {userCredits.toLocaleString()} credits
+            {userCredits.toLocaleString()} TMX
           </span>
         </div>
       </CardHeader>
@@ -307,7 +307,7 @@ export function BettingPanel({
             <div className="flex justify-between text-sm mb-1">
               <span className="text-muted-foreground">Potential payout</span>
               <span className="text-success font-mono font-medium">
-                {potentialPayout.toLocaleString()} credits
+                {potentialPayout.toLocaleString()} TMX
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -363,8 +363,8 @@ export function BettingPanel({
             : betAmount <= 0
             ? 'Enter amount'
             : betAmount > userCredits
-            ? 'Insufficient credits'
-            : `Place Bet - ${betAmount} credits`
+            ? 'Insufficient TMX'
+            : `Place Bet - ${betAmount} TMX`
           }
         </Button>
       </CardFooter>
