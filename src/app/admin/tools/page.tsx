@@ -343,23 +343,31 @@ export default function AdminToolsPage() {
   async function createTestUser() {
     if (!testEmail || !testDisplayName) return
     setActionLoading(true)
-    const supabase = createClient()
 
-    // Use RPC function to bypass RLS
-    const { data, error } = await supabase.rpc('create_test_user', {
-      p_email: testEmail,
-      p_display_name: testDisplayName,
-      p_credits: parseInt(testCredits) || 1000,
-    })
+    try {
+      const response = await fetch('/api/admin/create-test-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: testEmail,
+          displayName: testDisplayName,
+          credits: parseInt(testCredits) || 1000,
+        }),
+      })
 
-    if (error) {
-      setActionMessage({ type: 'error', text: error.message })
-    } else {
-      setActionMessage({ type: 'success', text: `Test user created: ${testDisplayName}. Use impersonation to place bets as this user.` })
-      setTestEmail('')
-      setTestDisplayName('')
-      setTestCredits('1000')
-      await loadUsers()
+      const data = await response.json()
+
+      if (!response.ok) {
+        setActionMessage({ type: 'error', text: data.error })
+      } else {
+        setActionMessage({ type: 'success', text: data.message })
+        setTestEmail('')
+        setTestDisplayName('')
+        setTestCredits('1000')
+        await loadUsers()
+      }
+    } catch (error) {
+      setActionMessage({ type: 'error', text: 'Failed to create test user' })
     }
     setActionLoading(false)
   }
