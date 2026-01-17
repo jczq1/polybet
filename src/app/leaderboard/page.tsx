@@ -50,7 +50,7 @@ export default function LeaderboardPage() {
         setCurrentUser(profile)
       }
 
-      // Get all profiles
+      // Get all profiles with created_at
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, display_name, credits, created_at')
@@ -75,6 +75,7 @@ export default function LeaderboardPage() {
       const unresolvedBetAmounts: Record<string, number> = {}
       const betCounts: Record<string, number> = {}
       const monthlyBonuses: Record<string, number> = {}
+      const signupBonuses: Record<string, number> = {}
 
       // For 30-day ROI: track bets placed and resolved in last 30 days
       const thirtyDaysAgo = new Date()
@@ -84,14 +85,22 @@ export default function LeaderboardPage() {
       // Calculate unresolved bets that existed 30 days ago
       const unresolvedBets30DaysAgo: Record<string, number> = {}
       const credits30DaysAgo: Record<string, number> = {}
+      const userCreatedAt: Record<string, string> = {}
 
-      // Process transactions to get monthly bonuses and calculate 30-day-ago state
+      // Track user creation dates
+      profiles?.forEach((profile: { id: string; credits: number; created_at: string }) => {
+        userCreatedAt[profile.id] = profile.created_at
+      })
+
+      // Process transactions to get monthly bonuses, signup bonuses, and calculate 30-day-ago state
       allTransactions?.forEach((tx: { user_id: string; amount: number; type: string; created_at: string }) => {
+        // Track signup bonus for each user (use actual amount, not hardcoded 1000)
+        if (tx.type === 'signup_bonus') {
+          signupBonuses[tx.user_id] = (signupBonuses[tx.user_id] || 0) + tx.amount
+        }
         // Sum up monthly bonuses for lifetime ROI calculation
-        if (tx.type === 'monthly_bonus' || tx.type === 'signup_bonus') {
-          if (tx.type === 'monthly_bonus') {
-            monthlyBonuses[tx.user_id] = (monthlyBonuses[tx.user_id] || 0) + tx.amount
-          }
+        if (tx.type === 'monthly_bonus') {
+          monthlyBonuses[tx.user_id] = (monthlyBonuses[tx.user_id] || 0) + tx.amount
         }
       })
 
@@ -112,7 +121,7 @@ export default function LeaderboardPage() {
 
       // Calculate credits 30 days ago by working backwards from transactions
       // Start with current credits and subtract transactions from last 30 days
-      profiles?.forEach((profile: { id: string; credits: number }) => {
+      profiles?.forEach((profile: { id: string; credits: number; created_at: string }) => {
         let credits30d = profile.credits
 
         allTransactions?.forEach((tx: { user_id: string; amount: number; created_at: string }) => {
@@ -126,20 +135,38 @@ export default function LeaderboardPage() {
       })
 
       // Calculate ROI for each user
-      const INITIAL_CREDITS = 1000
+      const DEFAULT_INITIAL_CREDITS = 1000
 
-      let data: LeaderboardEntry[] = (profiles || []).map((profile: { id: string; display_name: string; credits: number }) => {
+      let data: LeaderboardEntry[] = (profiles || []).map((profile: { id: string; display_name: string; credits: number; created_at: string }) => {
         const currentCredits = profile.credits
         const unresolvedBets = unresolvedBetAmounts[profile.id] || 0
         const currentTotalValue = currentCredits + unresolvedBets
 
+        // Get actual initial credits from signup bonus (fallback to 1000 if not found)
+        const initialCredits = signupBonuses[profile.id] || DEFAULT_INITIAL_CREDITS
+
         // Lifetime ROI: (current - initial) / initial * 100
-        // Initial = 1000 + monthly bonuses received
-        const totalDeposits = INITIAL_CREDITS + (monthlyBonuses[profile.id] || 0)
-        const lifetimeRoi = ((currentTotalValue - totalDeposits) / totalDeposits) * 100
+        // Initial = signup bonus + monthly bonuses received
+        const totalDeposits = initialCredits + (monthlyBonuses[profile.id] || 0)
+        const lifetimeRoi = totalDeposits > 0
+          ? ((currentTotalValue - totalDeposits) / totalDeposits) * 100
+          : 0
 
         // 30-Day ROI: (current - value_30d_ago) / value_30d_ago * 100
-        const value30DaysAgo = (credits30DaysAgo[profile.id] || INITIAL_CREDITS) + (unresolvedBets30DaysAgo[profile.id] || 0)
+        // If user was created less than 30 days ago, use their signup value as the starting point
+        const wasCreatedBefore30Days = profile.created_at < thirtyDaysAgoStr
+
+        let value30DaysAgo: number
+        if (wasCreatedBefore30Days) {
+          // User existed 30 days ago - use calculated historical value
+          const historicalCredits = credits30DaysAgo[profile.id]
+          // If we have historical data, use it; otherwise estimate from initial
+          value30DaysAgo = (historicalCredits !== undefined ? historicalCredits : initialCredits) + (unresolvedBets30DaysAgo[profile.id] || 0)
+        } else {
+          // User was created within last 30 days - use their initial credits as starting point
+          value30DaysAgo = initialCredits
+        }
+
         const roi30Day = value30DaysAgo > 0
           ? ((currentTotalValue - value30DaysAgo) / value30DaysAgo) * 100
           : 0
