@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { calculatePotentialPayout, formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
+import { checkBadgesOnBetPlaced } from '@/lib/badges'
 import type { Market, MarketOption } from '@/types/database'
 
 interface BettingPanelProps {
@@ -33,6 +34,13 @@ export function BettingPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [newBadges, setNewBadges] = useState<Array<{
+    id: string
+    name: string
+    icon: string
+    description: string
+  }>>([])
+  const [showBadgeAnimation, setShowBadgeAnimation] = useState(false)
 
   const betAmount = parseInt(amount) || 0
 
@@ -68,6 +76,40 @@ export function BettingPanel({
     } else {
       setSuccess(true)
       setLoading(false)
+
+      // Check for badges after successful bet
+      try {
+        // Check if user is first bettor on this option
+        const { data: betsOnOption } = await supabase
+          .from('bets')
+          .select('id')
+          .eq('option_id', selectedOption)
+          .limit(2)
+
+        const isFirstBettor = (betsOnOption?.length || 0) <= 1
+
+        const badgeResult = await checkBadgesOnBetPlaced({
+          userId,
+          betAmount,
+          userBalanceBefore: userCredits,
+          marketId: market.id,
+          isFirstBettor
+        })
+
+        if (badgeResult.success && badgeResult.newBadges && badgeResult.newBadges.count > 0) {
+          setNewBadges(badgeResult.newBadges.newly_earned)
+          setShowBadgeAnimation(true)
+          // Longer delay to show badge animation
+          setTimeout(() => {
+            router.refresh()
+          }, 3500)
+          return
+        }
+      } catch (e) {
+        console.error('Error checking badges:', e)
+        // Don't show error to user - badge check is non-critical
+      }
+
       setTimeout(() => {
         router.refresh()
       }, 1500)
@@ -93,6 +135,27 @@ export function BettingPanel({
           <p className="text-sm text-accent mt-2">
             Locked at {formatProbability(currentProbability)} odds
           </p>
+
+          {/* Show newly earned badges */}
+          {showBadgeAnimation && newBadges.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <p className="text-sm font-medium text-accent mb-3">
+                🎉 New Badge{newBadges.length > 1 ? 's' : ''} Earned!
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                {newBadges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className="flex flex-col items-center p-3 rounded-lg bg-accent/10 border border-accent/20"
+                  >
+                    <span className="text-3xl mb-1">{badge.icon}</span>
+                    <span className="text-sm font-medium text-foreground">{badge.name}</span>
+                    <span className="text-xs text-muted-foreground">{badge.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     )

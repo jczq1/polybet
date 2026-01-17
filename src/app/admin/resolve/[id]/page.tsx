@@ -81,6 +81,18 @@ export default function ResolvePage({ params }: ResolvePageProps) {
       return
     }
 
+    // Trigger badge checking for all affected users
+    try {
+      await fetch('/api/badges/post-resolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketId })
+      })
+    } catch (e) {
+      console.error('Error checking badges after resolution:', e)
+      // Non-critical, continue with redirect
+    }
+
     router.push('/admin')
     router.refresh()
   }

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ClaimBonusButton } from '@/components/auth/claim-bonus-button'
+import { UserBadges } from '@/components/badges/user-badges'
 
 export default async function ProfilePage() {
   const supabase = await createClient()
@@ -192,6 +193,9 @@ export default async function ProfilePage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Badges Section */}
+          <UserBadges userId={user.id} />
+
           {/* Monthly Bonus */}
           <Card className={canClaimBonus ? 'gradient-border' : ''}>
             <CardHeader>

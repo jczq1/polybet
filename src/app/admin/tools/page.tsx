@@ -208,19 +208,7 @@ export default function AdminToolsPage() {
     // Refund each bet
     if (bets) {
       for (const bet of bets) {
-        // Add credits back to user
-        await supabase.rpc('add_credits_to_user', {
-          p_user_id: bet.user_id,
-          p_amount: bet.amount,
-        }).catch(() => {
-          // Fallback: direct update if RPC doesn't exist
-          supabase
-            .from('profiles')
-            .update({ credits: supabase.rpc('increment_credits', { amount: bet.amount }) })
-            .eq('id', bet.user_id)
-        })
-
-        // Actually just do direct SQL
+        // Refund credits directly
         const { data: profile } = await supabase
           .from('profiles')
           .select('credits')

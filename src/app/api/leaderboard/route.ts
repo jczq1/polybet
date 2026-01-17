@@ -70,11 +70,14 @@ export async function GET() {
     })
 
     // Process bets
-    allBets?.forEach((bet: { user_id: string; amount: number; created_at: string; markets: { status: string } }) => {
+    allBets?.forEach((bet: any) => {
       betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
 
+      // Get market status (handle both array and object cases from Supabase)
+      const marketStatus = Array.isArray(bet.markets) ? bet.markets[0]?.status : bet.markets?.status
+
       // Current unresolved bets
-      if (bet.markets.status !== 'resolved') {
+      if (marketStatus !== 'resolved') {
         unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
 
         // Bets that were in unresolved markets 30 days ago
