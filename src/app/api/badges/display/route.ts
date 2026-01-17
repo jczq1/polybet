@@ -21,16 +21,32 @@ export async function GET(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { data, error } = await supabaseAdmin.rpc('get_displayed_badges', {
-      p_user_id: userId
-    })
+    // Query directly to include description
+    const { data, error } = await supabaseAdmin
+      .from('user_badges')
+      .select(`
+        display_order,
+        badges (id, name, icon, description)
+      `)
+      .eq('user_id', userId)
+      .not('display_order', 'is', null)
+      .order('display_order', { ascending: true })
 
     if (error) {
       console.error('Error fetching displayed badges:', error)
       return NextResponse.json({ error: 'Failed to fetch badges' }, { status: 500 })
     }
 
-    return NextResponse.json({ badges: data || [] })
+    // Transform to flat structure
+    const badges = (data || []).map((ub: any) => ({
+      id: ub.badges.id,
+      name: ub.badges.name,
+      icon: ub.badges.icon,
+      description: ub.badges.description,
+      display_order: ub.display_order
+    }))
+
+    return NextResponse.json({ badges })
   } catch (error) {
     console.error('Error in badges display GET:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

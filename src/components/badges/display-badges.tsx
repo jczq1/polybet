@@ -6,6 +6,7 @@ interface DisplayBadge {
   id: string
   name: string
   icon: string
+  description?: string
   display_order: number
 }
 
@@ -39,7 +40,7 @@ export function DisplayBadges({ userId, className = '' }: DisplayBadgesProps) {
       {badges.map((badge) => (
         <span
           key={badge.id}
-          title={badge.name}
+          title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
           className="text-base hover:scale-110 transition-transform cursor-default"
         >
           {badge.icon}
@@ -51,7 +52,7 @@ export function DisplayBadges({ userId, className = '' }: DisplayBadgesProps) {
 
 // Server-side version that accepts pre-fetched badges
 interface DisplayBadgesStaticProps {
-  badges: Array<{ id: string; name: string; icon: string }>
+  badges: Array<{ id: string; name: string; icon: string; description?: string }>
   className?: string
 }
 
@@ -63,7 +64,7 @@ export function DisplayBadgesStatic({ badges, className = '' }: DisplayBadgesSta
       {badges.map((badge) => (
         <span
           key={badge.id}
-          title={badge.name}
+          title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
           className="text-base hover:scale-110 transition-transform cursor-default"
         >
           {badge.icon}

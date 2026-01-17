@@ -10,6 +10,7 @@ interface DisplayedBadge {
   id: string
   name: string
   icon: string
+  description?: string
 }
 
 interface LeaderboardEntry {
@@ -142,7 +143,7 @@ export default function LeaderboardPage() {
                           {currentUserStats.displayed_badges.map((badge) => (
                             <span
                               key={badge.id}
-                              title={badge.name}
+                              title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
                               className="text-base"
                             >
                               {badge.icon}
@@ -307,7 +308,7 @@ export default function LeaderboardPage() {
                                       {entry.displayed_badges.map((badge) => (
                                         <span
                                           key={badge.id}
-                                          title={badge.name}
+                                          title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
                                           className="text-base hover:scale-110 transition-transform cursor-default"
                                         >
                                           {badge.icon}
