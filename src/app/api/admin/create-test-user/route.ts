@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Update the profile with the correct credits (profile is auto-created by trigger)
+    // Wait a moment for the trigger to complete
+    await new Promise(resolve => setTimeout(resolve, 500))
+
     const { error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -71,13 +74,29 @@ export async function POST(request: NextRequest) {
         })
     }
 
-    // Record signup bonus transaction
-    await supabaseAdmin.from('transactions').insert({
-      user_id: authUser.user.id,
-      amount: credits || 1000,
-      type: 'signup_bonus',
-      description: 'Test user signup bonus'
-    })
+    // Check if signup_bonus transaction already exists (from trigger)
+    const { data: existingBonus } = await supabaseAdmin
+      .from('transactions')
+      .select('id')
+      .eq('user_id', authUser.user.id)
+      .eq('type', 'signup_bonus')
+      .single()
+
+    if (existingBonus) {
+      // Update existing signup bonus to match the requested credits
+      await supabaseAdmin
+        .from('transactions')
+        .update({ amount: credits || 1000 })
+        .eq('id', existingBonus.id)
+    } else {
+      // Record signup bonus transaction only if it doesn't exist
+      await supabaseAdmin.from('transactions').insert({
+        user_id: authUser.user.id,
+        amount: credits || 1000,
+        type: 'signup_bonus',
+        description: 'Test user signup bonus'
+      })
+    }
 
     return NextResponse.json({
       success: true,

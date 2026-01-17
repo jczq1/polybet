@@ -46,9 +46,17 @@ export async function GET() {
     const credits30DaysAgo: Record<string, number> = {}
 
     // Process transactions
+    // Track signup bonus timestamps to only use the first one per user (avoid duplicates)
+    const signupBonusTimestamps: Record<string, string> = {}
+
     allTransactions?.forEach((tx: { user_id: string; amount: number; type: string; created_at: string }) => {
       if (tx.type === 'signup_bonus') {
-        signupBonuses[tx.user_id] = (signupBonuses[tx.user_id] || 0) + tx.amount
+        // Only use ONE signup bonus per user (the first/earliest one)
+        // This prevents double-counting if there are duplicate transactions
+        if (!signupBonusTimestamps[tx.user_id] || tx.created_at < signupBonusTimestamps[tx.user_id]) {
+          signupBonuses[tx.user_id] = tx.amount
+          signupBonusTimestamps[tx.user_id] = tx.created_at
+        }
       }
       if (tx.type === 'monthly_bonus') {
         // Total monthly bonuses (for lifetime ROI)
