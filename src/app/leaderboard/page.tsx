@@ -50,121 +50,26 @@ export default function LeaderboardPage() {
         setCurrentUser(profile)
       }
 
-      // Get all profiles
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, display_name, credits, created_at')
+      // Fetch leaderboard data from API (uses service role to bypass RLS)
+      // This ensures all users see the same consistent data
+      const response = await fetch('/api/leaderboard')
+      const { data: leaderboardData } = await response.json()
 
-      // Get all bets with market status to identify unresolved bets
-      const { data: allBets } = await supabase
-        .from('bets')
-        .select(`
-          user_id,
-          amount,
-          market_id,
-          created_at,
-          markets!inner (status)
-        `)
-
-      // Get all transactions to calculate monthly bonuses and historical data
-      const { data: allTransactions } = await supabase
-        .from('transactions')
-        .select('user_id, amount, type, created_at')
-
-      // Calculate data per user
-      const unresolvedBetAmounts: Record<string, number> = {}
-      const betCounts: Record<string, number> = {}
-      const monthlyBonuses: Record<string, number> = {}
-
-      // For 30-day ROI: track bets placed and resolved in last 30 days
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
-
-      // Calculate unresolved bets that existed 30 days ago
-      const unresolvedBets30DaysAgo: Record<string, number> = {}
-      const credits30DaysAgo: Record<string, number> = {}
-
-      // Process transactions to get monthly bonuses and calculate 30-day-ago state
-      allTransactions?.forEach((tx: { user_id: string; amount: number; type: string; created_at: string }) => {
-        // Sum up monthly bonuses for lifetime ROI calculation
-        if (tx.type === 'monthly_bonus' || tx.type === 'signup_bonus') {
-          if (tx.type === 'monthly_bonus') {
-            monthlyBonuses[tx.user_id] = (monthlyBonuses[tx.user_id] || 0) + tx.amount
-          }
-        }
-      })
-
-      // Process bets
-      allBets?.forEach((bet: { user_id: string; amount: number; created_at: string; markets: { status: string } }) => {
-        betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
-
-        // Current unresolved bets
-        if (bet.markets.status !== 'resolved') {
-          unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
-
-          // If bet was placed before 30 days ago and still unresolved, it was unresolved 30 days ago too
-          if (bet.created_at < thirtyDaysAgoStr) {
-            unresolvedBets30DaysAgo[bet.user_id] = (unresolvedBets30DaysAgo[bet.user_id] || 0) + bet.amount
-          }
-        }
-      })
-
-      // Calculate credits 30 days ago by working backwards from transactions
-      // Start with current credits and subtract transactions from last 30 days
-      profiles?.forEach((profile: { id: string; credits: number }) => {
-        let credits30d = profile.credits
-
-        allTransactions?.forEach((tx: { user_id: string; amount: number; created_at: string }) => {
-          if (tx.user_id === profile.id && tx.created_at >= thirtyDaysAgoStr) {
-            // Subtract transactions from last 30 days to get balance 30 days ago
-            credits30d -= tx.amount
-          }
-        })
-
-        credits30DaysAgo[profile.id] = Math.max(0, credits30d)
-      })
-
-      // Calculate ROI for each user
-      const INITIAL_CREDITS = 1000
-
-      let data: LeaderboardEntry[] = (profiles || []).map((profile: { id: string; display_name: string; credits: number }) => {
-        const currentCredits = profile.credits
-        const unresolvedBets = unresolvedBetAmounts[profile.id] || 0
-        const currentTotalValue = currentCredits + unresolvedBets
-
-        // Lifetime ROI: (current - initial) / initial * 100
-        // Initial = 1000 + monthly bonuses received
-        const totalDeposits = INITIAL_CREDITS + (monthlyBonuses[profile.id] || 0)
-        const lifetimeRoi = ((currentTotalValue - totalDeposits) / totalDeposits) * 100
-
-        // 30-Day ROI: (current - value_30d_ago) / value_30d_ago * 100
-        const value30DaysAgo = (credits30DaysAgo[profile.id] || INITIAL_CREDITS) + (unresolvedBets30DaysAgo[profile.id] || 0)
-        const roi30Day = value30DaysAgo > 0
-          ? ((currentTotalValue - value30DaysAgo) / value30DaysAgo) * 100
-          : 0
-
-        return {
-          id: profile.id,
-          display_name: profile.display_name,
-          credits: profile.credits,
-          unresolved_bets: unresolvedBets,
-          roi_30day: roi30Day,
-          roi_lifetime: lifetimeRoi,
-          total_bets: betCounts[profile.id] || 0,
-        }
-      })
+      if (!leaderboardData) {
+        setLoading(false)
+        return
+      }
 
       // Sort based on selected criteria
-      sortData(data, sortBy)
-      setLeaderboardData(data)
+      sortData(leaderboardData, sortBy)
+      setLeaderboardData(leaderboardData)
 
       // Find current user's rank and stats
       if (user) {
-        const userIndex = data.findIndex(u => u.id === user.id)
+        const userIndex = leaderboardData.findIndex((u: LeaderboardEntry) => u.id === user.id)
         setCurrentUserRank(userIndex)
         if (userIndex >= 0) {
-          setCurrentUserStats(data[userIndex])
+          setCurrentUserStats(leaderboardData[userIndex])
         }
       }
 

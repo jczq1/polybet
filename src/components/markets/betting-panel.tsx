@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { calculatePotentialPayout, formatProbability, formatDecimalOdds } from '@/lib/oddsCalculator'
+import { checkBadgesOnBetPlaced } from '@/lib/badges'
 import type { Market, MarketOption } from '@/types/database'
 
 interface BettingPanelProps {
@@ -33,6 +34,13 @@ export function BettingPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [newBadges, setNewBadges] = useState<Array<{
+    id: string
+    name: string
+    icon: string
+    description: string
+  }>>([])
+  const [showBadgeAnimation, setShowBadgeAnimation] = useState(false)
 
   const betAmount = parseInt(amount) || 0
 
@@ -68,6 +76,40 @@ export function BettingPanel({
     } else {
       setSuccess(true)
       setLoading(false)
+
+      // Check for badges after successful bet
+      try {
+        // Check if user is first bettor on this option
+        const { data: betsOnOption } = await supabase
+          .from('bets')
+          .select('id')
+          .eq('option_id', selectedOption)
+          .limit(2)
+
+        const isFirstBettor = (betsOnOption?.length || 0) <= 1
+
+        const badgeResult = await checkBadgesOnBetPlaced({
+          userId,
+          betAmount,
+          userBalanceBefore: userCredits,
+          marketId: market.id,
+          isFirstBettor
+        })
+
+        if (badgeResult.success && badgeResult.newBadges && badgeResult.newBadges.count > 0) {
+          setNewBadges(badgeResult.newBadges.newly_earned)
+          setShowBadgeAnimation(true)
+          // Longer delay to show badge animation
+          setTimeout(() => {
+            router.refresh()
+          }, 3500)
+          return
+        }
+      } catch (e) {
+        console.error('Error checking badges:', e)
+        // Don't show error to user - badge check is non-critical
+      }
+
       setTimeout(() => {
         router.refresh()
       }, 1500)
@@ -93,6 +135,27 @@ export function BettingPanel({
           <p className="text-sm text-accent mt-2">
             Locked at {formatProbability(currentProbability)} odds
           </p>
+
+          {/* Show newly earned badges */}
+          {showBadgeAnimation && newBadges.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <p className="text-sm font-medium text-accent mb-3">
+                🎉 New Badge{newBadges.length > 1 ? 's' : ''} Earned!
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                {newBadges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className="flex flex-col items-center p-3 rounded-lg bg-accent/10 border border-accent/20"
+                  >
+                    <span className="text-3xl mb-1">{badge.icon}</span>
+                    <span className="text-sm font-medium text-foreground">{badge.name}</span>
+                    <span className="text-xs text-muted-foreground">{badge.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -239,14 +302,9 @@ export function BettingPanel({
                     <span className={`font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                       {option.option_text}
                     </span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">
-                        {formatProbability(probability)}
-                      </span>
-                      <span className={`text-sm font-mono ${isSelected ? 'text-primary' : 'text-accent'}`}>
-                        {formatDecimalOdds(decimalOdds)}
-                      </span>
-                    </div>
+                    <span className={`text-sm font-mono ${isSelected ? 'text-primary' : 'text-accent'}`}>
+                      {formatProbability(probability)}
+                    </span>
                   </div>
                   {/* Probability bar */}
                   <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -301,7 +359,7 @@ export function BettingPanel({
             <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground">Your odds (locked at purchase)</span>
               <span className="text-accent font-mono">
-                {formatProbability(currentProbability)} ({formatDecimalOdds(1/currentProbability)})
+                {formatProbability(currentProbability)}
               </span>
             </div>
             <div className="flex justify-between text-sm mb-1">
@@ -325,10 +383,10 @@ export function BettingPanel({
             <p className="text-sm font-medium text-accent mb-2">
               Your existing bets on this market:
             </p>
-            {existingBets.map((bet) => {
+            {existingBets.map((bet, index) => {
               const option = options.find(o => o.id === bet.option_id)
               return (
-                <div key={bet.option_id} className="flex justify-between text-sm">
+                <div key={`${bet.option_id}-${index}`} className="flex justify-between text-sm">
                   <span className="text-foreground">{option?.option_text}</span>
                   <div>
                     <span className="font-mono text-foreground">{bet.amount}</span>

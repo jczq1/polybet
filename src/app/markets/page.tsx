@@ -58,27 +58,39 @@ export default async function MarketsPage() {
           <div className="space-y-2 mb-4">
             {market.market_options?.slice(0, 3).map((option: { id: string; option_text: string; is_winner: boolean | null; current_probability?: number }) => {
               const probability = option.current_probability || 0.5
-              const decimalOdds = 1 / probability
               return (
                 <div
                   key={option.id}
-                  className={`text-sm px-3 py-2 rounded-lg flex justify-between items-center ${
+                  className={`relative overflow-hidden text-sm rounded-lg border ${
                     option.is_winner
-                      ? 'bg-success/20 text-success border border-success/30'
+                      ? 'border-success/30 bg-success/5'
                       : option.is_winner === false
-                      ? 'bg-muted text-muted-foreground'
-                      : 'bg-secondary text-foreground'
+                      ? 'border-border bg-muted/50'
+                      : 'border-border bg-secondary/50'
                   }`}
                 >
-                  <span>
-                    {option.option_text}
-                    {option.is_winner && ' ✓'}
-                  </span>
-                  {!option.is_winner && option.is_winner !== false && (
-                    <span className="text-xs font-mono text-accent">
-                      {formatDecimalOdds(decimalOdds)}
+                  {/* Progress bar background */}
+                  <div
+                    className={`absolute inset-0 ${
+                      option.is_winner
+                        ? 'bg-success/20'
+                        : option.is_winner === false
+                        ? 'bg-muted-foreground/10'
+                        : 'bg-primary/15'
+                    }`}
+                    style={{ width: `${probability * 100}%` }}
+                  />
+                  <div className="relative px-3 py-2 flex justify-between items-center">
+                    <span className={option.is_winner ? 'text-success font-medium' : option.is_winner === false ? 'text-muted-foreground' : 'text-foreground'}>
+                      {option.option_text}
+                      {option.is_winner && ' ✓'}
                     </span>
-                  )}
+                    {!option.is_winner && option.is_winner !== false && (
+                      <span className="text-xs font-mono text-accent font-medium">
+                        {formatProbability(probability)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}

@@ -208,19 +208,7 @@ export default function AdminToolsPage() {
     // Refund each bet
     if (bets) {
       for (const bet of bets) {
-        // Add credits back to user
-        await supabase.rpc('add_credits_to_user', {
-          p_user_id: bet.user_id,
-          p_amount: bet.amount,
-        }).catch(() => {
-          // Fallback: direct update if RPC doesn't exist
-          supabase
-            .from('profiles')
-            .update({ credits: supabase.rpc('increment_credits', { amount: bet.amount }) })
-            .eq('id', bet.user_id)
-        })
-
-        // Actually just do direct SQL
+        // Refund credits directly
         const { data: profile } = await supabase
           .from('profiles')
           .select('credits')
@@ -343,37 +331,31 @@ export default function AdminToolsPage() {
   async function createTestUser() {
     if (!testEmail || !testDisplayName) return
     setActionLoading(true)
-    const supabase = createClient()
 
-    // Create profile directly as test user
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({
-        id: crypto.randomUUID(),
-        email: testEmail,
-        display_name: testDisplayName,
-        credits: parseInt(testCredits) || 1000,
-        is_admin: false,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      setActionMessage({ type: 'error', text: error.message })
-    } else {
-      // Record signup bonus transaction
-      await supabase.from('transactions').insert({
-        user_id: data.id,
-        amount: parseInt(testCredits) || 1000,
-        type: 'signup_bonus',
-        description: 'Test user signup bonus',
+    try {
+      const response = await fetch('/api/admin/create-test-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: testEmail,
+          displayName: testDisplayName,
+          credits: parseInt(testCredits) || 1000,
+        }),
       })
 
-      setActionMessage({ type: 'success', text: `Test user created: ${testDisplayName}. Note: Test users need special auth bypass to login.` })
-      setTestEmail('')
-      setTestDisplayName('')
-      setTestCredits('1000')
-      await loadUsers()
+      const data = await response.json()
+
+      if (!response.ok) {
+        setActionMessage({ type: 'error', text: data.error })
+      } else {
+        setActionMessage({ type: 'success', text: data.message })
+        setTestEmail('')
+        setTestDisplayName('')
+        setTestCredits('1000')
+        await loadUsers()
+      }
+    } catch (error) {
+      setActionMessage({ type: 'error', text: 'Failed to create test user' })
     }
     setActionLoading(false)
   }
