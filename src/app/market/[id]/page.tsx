@@ -190,14 +190,9 @@ export default async function MarketPage({ params }: MarketPageProps) {
                         </div>
 
                         <div className="text-right">
-                          <div className="flex items-center gap-3 justify-end">
-                            <span className="text-sm text-muted-foreground">
-                              {formatProbability(probability)}
-                            </span>
-                            <span className="text-sm font-mono text-accent font-medium">
-                              {formatDecimalOdds(decimalOdds)}
-                            </span>
-                          </div>
+                          <span className="text-sm font-mono text-accent font-medium">
+                            {formatProbability(probability)}
+                          </span>
                           <p className="text-xs text-muted-foreground">
                             {(option.total_pool || 0).toLocaleString()} credits
                           </p>

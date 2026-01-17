@@ -76,7 +76,7 @@ export default async function MarketsPage() {
                   </span>
                   {!option.is_winner && option.is_winner !== false && (
                     <span className="text-xs font-mono text-accent">
-                      {formatDecimalOdds(decimalOdds)}
+                      {formatProbability(probability)}
                     </span>
                   )}
                 </div>

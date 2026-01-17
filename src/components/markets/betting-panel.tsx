@@ -239,14 +239,9 @@ export function BettingPanel({
                     <span className={`font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                       {option.option_text}
                     </span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">
-                        {formatProbability(probability)}
-                      </span>
-                      <span className={`text-sm font-mono ${isSelected ? 'text-primary' : 'text-accent'}`}>
-                        {formatDecimalOdds(decimalOdds)}
-                      </span>
-                    </div>
+                    <span className={`text-sm font-mono ${isSelected ? 'text-primary' : 'text-accent'}`}>
+                      {formatProbability(probability)}
+                    </span>
                   </div>
                   {/* Probability bar */}
                   <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -301,7 +296,7 @@ export function BettingPanel({
             <div className="flex justify-between text-sm mb-2">
               <span className="text-muted-foreground">Your odds (locked at purchase)</span>
               <span className="text-accent font-mono">
-                {formatProbability(currentProbability)} ({formatDecimalOdds(1/currentProbability)})
+                {formatProbability(currentProbability)}
               </span>
             </div>
             <div className="flex justify-between text-sm mb-1">
