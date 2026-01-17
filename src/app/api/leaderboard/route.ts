@@ -31,17 +31,17 @@ export async function GET() {
       .from('transactions')
       .select('user_id, amount, type, created_at')
 
-    // Calculate data per user
-    const unresolvedBetAmounts: Record<string, number> = {}
-    const betCounts: Record<string, number> = {}
-    const monthlyBonuses: Record<string, number> = {}
-    const signupBonuses: Record<string, number> = {}
-
-    // For 30-day ROI
+    // Calculate 30 days ago timestamp
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
 
+    // Calculate data per user
+    const unresolvedBetAmounts: Record<string, number> = {}
+    const betCounts: Record<string, number> = {}
+    const signupBonuses: Record<string, number> = {}
+    const totalMonthlyBonuses: Record<string, number> = {}
+    const monthlyBonusesLast30Days: Record<string, number> = {}
     const unresolvedBets30DaysAgo: Record<string, number> = {}
     const credits30DaysAgo: Record<string, number> = {}
 
@@ -51,7 +51,13 @@ export async function GET() {
         signupBonuses[tx.user_id] = (signupBonuses[tx.user_id] || 0) + tx.amount
       }
       if (tx.type === 'monthly_bonus') {
-        monthlyBonuses[tx.user_id] = (monthlyBonuses[tx.user_id] || 0) + tx.amount
+        // Total monthly bonuses (for lifetime ROI)
+        totalMonthlyBonuses[tx.user_id] = (totalMonthlyBonuses[tx.user_id] || 0) + tx.amount
+
+        // Monthly bonuses received in past 30 days (for 30-day ROI)
+        if (tx.created_at >= thirtyDaysAgoStr) {
+          monthlyBonusesLast30Days[tx.user_id] = (monthlyBonusesLast30Days[tx.user_id] || 0) + tx.amount
+        }
       }
     })
 
@@ -59,21 +65,25 @@ export async function GET() {
     allBets?.forEach((bet: { user_id: string; amount: number; created_at: string; markets: { status: string } }) => {
       betCounts[bet.user_id] = (betCounts[bet.user_id] || 0) + 1
 
+      // Current unresolved bets
       if (bet.markets.status !== 'resolved') {
         unresolvedBetAmounts[bet.user_id] = (unresolvedBetAmounts[bet.user_id] || 0) + bet.amount
 
+        // Bets that were in unresolved markets 30 days ago
+        // (bets placed before 30 days ago that are STILL unresolved)
         if (bet.created_at < thirtyDaysAgoStr) {
           unresolvedBets30DaysAgo[bet.user_id] = (unresolvedBets30DaysAgo[bet.user_id] || 0) + bet.amount
         }
       }
     })
 
-    // Calculate credits 30 days ago
+    // Calculate credits 30 days ago by working backwards from transactions
     profiles?.forEach((profile: { id: string; credits: number; created_at: string }) => {
       let credits30d = profile.credits
 
       allTransactions?.forEach((tx: { user_id: string; amount: number; created_at: string }) => {
         if (tx.user_id === profile.id && tx.created_at >= thirtyDaysAgoStr) {
+          // Subtract transactions from last 30 days to get balance 30 days ago
           credits30d -= tx.amount
         }
       })
@@ -86,37 +96,56 @@ export async function GET() {
 
     const leaderboardData = (profiles || []).map((profile: { id: string; display_name: string; credits: number; created_at: string }) => {
       const currentCredits = profile.credits
-      const unresolvedBets = unresolvedBetAmounts[profile.id] || 0
-      const currentTotalValue = currentCredits + unresolvedBets
+      const currentUnresolvedBets = unresolvedBetAmounts[profile.id] || 0
+      const currentTotalValue = currentCredits + currentUnresolvedBets
 
-      const initialCredits = signupBonuses[profile.id] || DEFAULT_INITIAL_CREDITS
+      const startingBalance = signupBonuses[profile.id] || DEFAULT_INITIAL_CREDITS
+      const allMonthlyRewards = totalMonthlyBonuses[profile.id] || 0
 
-      // Lifetime ROI
-      const totalDeposits = initialCredits + (monthlyBonuses[profile.id] || 0)
-      const lifetimeRoi = totalDeposits > 0
-        ? ((currentTotalValue - totalDeposits) / totalDeposits) * 100
+      // ============================================
+      // LIFETIME ROI
+      // ============================================
+      // Net change = (current balance + unresolved bets) - (starting balance + all monthly rewards)
+      // Initial = starting balance + all monthly rewards
+      // ROI = net change / initial * 100%
+      const lifetimeInitial = startingBalance + allMonthlyRewards
+      const lifetimeNetChange = currentTotalValue - lifetimeInitial
+      const lifetimeRoi = lifetimeInitial > 0
+        ? (lifetimeNetChange / lifetimeInitial) * 100
         : 0
 
-      // 30-Day ROI
-      const wasCreatedBefore30Days = profile.created_at < thirtyDaysAgoStr
+      // ============================================
+      // 30-DAY ROI
+      // ============================================
+      // Check if user was created in the past 30 days
+      const userCreatedAt = new Date(profile.created_at)
+      const wasCreatedWithin30Days = profile.created_at >= thirtyDaysAgoStr
 
-      let value30DaysAgo: number
-      if (wasCreatedBefore30Days) {
-        const historicalCredits = credits30DaysAgo[profile.id]
-        value30DaysAgo = (historicalCredits !== undefined ? historicalCredits : initialCredits) + (unresolvedBets30DaysAgo[profile.id] || 0)
+      let roi30Day: number
+
+      if (wasCreatedWithin30Days) {
+        // User created within past 30 days: 30-day ROI equals lifetime ROI
+        roi30Day = lifetimeRoi
       } else {
-        value30DaysAgo = initialCredits
-      }
+        // User existed 30 days ago
+        // Initial = (balance 30 days ago) + (unresolved bets 30 days ago) + (monthly rewards in past 30 days)
+        const balance30DaysAgo = credits30DaysAgo[profile.id] || 0
+        const unresolvedBetsValue30DaysAgo = unresolvedBets30DaysAgo[profile.id] || 0
+        const monthlyRewardsLast30Days = monthlyBonusesLast30Days[profile.id] || 0
 
-      const roi30Day = value30DaysAgo > 0
-        ? ((currentTotalValue - value30DaysAgo) / value30DaysAgo) * 100
-        : 0
+        const initial30Day = balance30DaysAgo + unresolvedBetsValue30DaysAgo + monthlyRewardsLast30Days
+        const netChange30Day = currentTotalValue - initial30Day
+
+        roi30Day = initial30Day > 0
+          ? (netChange30Day / initial30Day) * 100
+          : 0
+      }
 
       return {
         id: profile.id,
         display_name: profile.display_name,
         credits: profile.credits,
-        unresolved_bets: unresolvedBets,
+        unresolved_bets: currentUnresolvedBets,
         roi_30day: roi30Day,
         roi_lifetime: lifetimeRoi,
         total_bets: betCounts[profile.id] || 0,
