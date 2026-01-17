@@ -15,6 +15,32 @@ export async function GET() {
       .from('profiles')
       .select('id, display_name, credits, created_at')
 
+    // Get all displayed badges for all users
+    const { data: displayedBadges } = await supabaseAdmin
+      .from('user_badges')
+      .select(`
+        user_id,
+        display_order,
+        badges (id, name, icon)
+      `)
+      .not('display_order', 'is', null)
+      .order('display_order', { ascending: true })
+
+    // Group badges by user
+    const userBadges: Record<string, Array<{ id: string; name: string; icon: string }>> = {}
+    displayedBadges?.forEach((ub: any) => {
+      if (!userBadges[ub.user_id]) {
+        userBadges[ub.user_id] = []
+      }
+      if (ub.badges) {
+        userBadges[ub.user_id].push({
+          id: ub.badges.id,
+          name: ub.badges.name,
+          icon: ub.badges.icon
+        })
+      }
+    })
+
     // Get all bets with market status
     const { data: allBets } = await supabaseAdmin
       .from('bets')
@@ -160,6 +186,7 @@ export async function GET() {
         roi_30day: roi30Day,
         roi_lifetime: lifetimeRoi,
         total_bets: betCounts[profile.id] || 0,
+        displayed_badges: userBadges[profile.id] || [],
       }
     })
 

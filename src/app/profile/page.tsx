@@ -4,6 +4,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ClaimBonusButton } from '@/components/auth/claim-bonus-button'
 import { UserBadges } from '@/components/badges/user-badges'
+import { BadgeSelector } from '@/components/badges/badge-selector'
+import { DisplayBadges } from '@/components/badges/display-badges'
 
 export default async function ProfilePage() {
   const supabase = await createClient()
@@ -60,7 +62,10 @@ export default async function ProfilePage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">{profile.display_name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-foreground">{profile.display_name}</h1>
+          <DisplayBadges userId={user.id} className="text-2xl" />
+        </div>
         <p className="text-muted-foreground">{profile.email}</p>
         {profile.is_admin && (
           <Badge variant="accent" className="mt-2">Admin</Badge>
@@ -193,7 +198,10 @@ export default async function ProfilePage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Badges Section */}
+          {/* Badge Selector - Customize displayed badges */}
+          <BadgeSelector userId={user.id} />
+
+          {/* All Earned Badges */}
           <UserBadges userId={user.id} />
 
           {/* Monthly Bonus */}

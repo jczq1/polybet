@@ -6,6 +6,12 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
+interface DisplayedBadge {
+  id: string
+  name: string
+  icon: string
+}
+
 interface LeaderboardEntry {
   id: string
   display_name: string
@@ -14,6 +20,7 @@ interface LeaderboardEntry {
   roi_30day: number
   roi_lifetime: number
   total_bets: number
+  displayed_badges: DisplayedBadge[]
 }
 
 interface UserProfile {
@@ -128,7 +135,22 @@ export default function LeaderboardPage() {
                     {currentUser.display_name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="font-semibold text-foreground">{currentUser.display_name}</p>
+                    <p className="font-semibold text-foreground flex items-center gap-1.5">
+                      {currentUser.display_name}
+                      {currentUserStats?.displayed_badges && currentUserStats.displayed_badges.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5">
+                          {currentUserStats.displayed_badges.map((badge) => (
+                            <span
+                              key={badge.id}
+                              title={badge.name}
+                              className="text-base"
+                            >
+                              {badge.icon}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-sm text-primary">
                       Rank #{currentUserRank >= 0 ? currentUserRank + 1 : '--'}
                     </p>
@@ -278,9 +300,22 @@ export default function LeaderboardPage() {
                                 {entry.display_name.charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <p className="font-medium text-foreground">
+                                <p className="font-medium text-foreground flex items-center gap-1.5">
                                   {entry.display_name}
-                                  {isCurrentUser && <span className="text-primary ml-2">(You)</span>}
+                                  {entry.displayed_badges && entry.displayed_badges.length > 0 && (
+                                    <span className="inline-flex items-center gap-0.5">
+                                      {entry.displayed_badges.map((badge) => (
+                                        <span
+                                          key={badge.id}
+                                          title={badge.name}
+                                          className="text-base hover:scale-110 transition-transform cursor-default"
+                                        >
+                                          {badge.icon}
+                                        </span>
+                                      ))}
+                                    </span>
+                                  )}
+                                  {isCurrentUser && <span className="text-primary ml-1">(You)</span>}
                                 </p>
                                 <p className="text-xs text-muted-foreground">CMU Student</p>
                               </div>
