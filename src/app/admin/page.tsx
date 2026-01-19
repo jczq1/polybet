@@ -136,7 +136,7 @@ export default async function AdminPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
         <Link href="/admin/markets/new">
           <Card hover className="h-full">
             <CardHeader>
@@ -208,6 +208,22 @@ export default async function AdminPage() {
               </CardTitle>
               <CardDescription>
                 Test tools, bet simulator, and debugging utilities
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        <Link href="/admin/badges">
+          <Card hover className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <span className="text-xl">🏆</span>
+                </div>
+                Manage Badges
+              </CardTitle>
+              <CardDescription>
+                Create and edit achievement badges with custom images
               </CardDescription>
             </CardHeader>
           </Card>
