@@ -67,8 +67,16 @@ export function UserBadges({ userId }: UserBadgesProps) {
                 className="flex flex-col items-center p-3 rounded-lg bg-secondary border border-border hover:border-accent/50 transition-colors group"
                 title={userBadge.badges.description}
               >
-                <span className="text-3xl mb-1 group-hover:scale-110 transition-transform">
-                  {userBadge.badges.icon}
+                <span className="mb-1 group-hover:scale-110 transition-transform">
+                  {userBadge.badges.image_url ? (
+                    <img
+                      src={userBadge.badges.image_url}
+                      alt={userBadge.badges.name}
+                      className="w-8 h-8 object-contain"
+                    />
+                  ) : (
+                    <span className="text-3xl">{userBadge.badges.icon}</span>
+                  )}
                 </span>
                 <span className="text-xs font-medium text-foreground text-center">
                   {userBadge.badges.name}

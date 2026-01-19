@@ -10,6 +10,7 @@ interface DisplayedBadge {
   id: string
   name: string
   icon: string
+  image_url?: string | null
   description?: string
 }
 
@@ -139,14 +140,18 @@ export default function LeaderboardPage() {
                     <p className="font-semibold text-foreground flex items-center gap-1.5">
                       {currentUser.display_name}
                       {currentUserStats?.displayed_badges && currentUserStats.displayed_badges.length > 0 && (
-                        <span className="inline-flex items-center gap-0.5">
+                        <span className="inline-flex items-center gap-1">
                           {currentUserStats.displayed_badges.map((badge) => (
                             <span
                               key={badge.id}
                               title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
-                              className="text-base"
+                              className="inline-flex items-center"
                             >
-                              {badge.icon}
+                              {badge.image_url ? (
+                                <img src={badge.image_url} alt={badge.name} className="w-5 h-5 object-contain" />
+                              ) : (
+                                badge.icon
+                              )}
                             </span>
                           ))}
                         </span>
@@ -304,14 +309,18 @@ export default function LeaderboardPage() {
                                 <p className="font-medium text-foreground flex items-center gap-1.5">
                                   {entry.display_name}
                                   {entry.displayed_badges && entry.displayed_badges.length > 0 && (
-                                    <span className="inline-flex items-center gap-0.5">
+                                    <span className="inline-flex items-center gap-1">
                                       {entry.displayed_badges.map((badge) => (
                                         <span
                                           key={badge.id}
                                           title={`${badge.name}${badge.description ? ` - ${badge.description}` : ''}`}
-                                          className="text-base hover:scale-110 transition-transform cursor-default"
+                                          className="inline-flex items-center hover:scale-110 transition-transform cursor-default"
                                         >
-                                          {badge.icon}
+                                          {badge.image_url ? (
+                                            <img src={badge.image_url} alt={badge.name} className="w-5 h-5 object-contain" />
+                                          ) : (
+                                            badge.icon
+                                          )}
                                         </span>
                                       ))}
                                     </span>

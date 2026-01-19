@@ -21,13 +21,13 @@ export async function GET() {
       .select(`
         user_id,
         display_order,
-        badges (id, name, icon, description)
+        badges (id, name, icon, image_url, description)
       `)
       .not('display_order', 'is', null)
       .order('display_order', { ascending: true })
 
     // Group badges by user
-    const userBadges: Record<string, Array<{ id: string; name: string; icon: string; description: string }>> = {}
+    const userBadges: Record<string, Array<{ id: string; name: string; icon: string; image_url: string | null; description: string }>> = {}
     displayedBadges?.forEach((ub: any) => {
       if (!userBadges[ub.user_id]) {
         userBadges[ub.user_id] = []
@@ -37,6 +37,7 @@ export async function GET() {
           id: ub.badges.id,
           name: ub.badges.name,
           icon: ub.badges.icon,
+          image_url: ub.badges.image_url,
           description: ub.badges.description
         })
       }
