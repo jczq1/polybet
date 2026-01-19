@@ -212,6 +212,22 @@ export default async function AdminPage() {
             </CardHeader>
           </Card>
         </Link>
+
+        <Link href="/admin/badges">
+          <Card hover className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <span className="text-xl">🏆</span>
+                </div>
+                Manage Badges
+              </CardTitle>
+              <CardDescription>
+                Create and edit achievement badges with custom images
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
 
       {/* Recent Markets */}
