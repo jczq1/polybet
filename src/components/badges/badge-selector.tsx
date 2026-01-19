@@ -9,6 +9,7 @@ interface Badge {
   id: string
   name: string
   icon: string
+  image_url?: string | null
   description: string
 }
 
@@ -149,10 +150,14 @@ export function BadgeSelector({ userId }: BadgeSelectorProps) {
                     className="flex items-center gap-1"
                   >
                     <span
-                      className="text-lg cursor-pointer hover:scale-110 transition-transform"
+                      className="cursor-pointer hover:scale-110 transition-transform"
                       title={`${badge.name} - Click arrows to reorder`}
                     >
-                      {badge.icon}
+                      {badge.image_url ? (
+                        <img src={badge.image_url} alt={badge.name} className="w-6 h-6 object-contain" />
+                      ) : (
+                        <span className="text-lg">{badge.icon}</span>
+                      )}
                     </span>
                     <div className="flex flex-col -space-y-1">
                       {index > 0 && (
@@ -200,7 +205,13 @@ export function BadgeSelector({ userId }: BadgeSelectorProps) {
                     : 'border-border bg-secondary opacity-50 cursor-not-allowed'
                 }`}
               >
-                <span className="text-2xl block mb-1">{userBadge.badges.icon}</span>
+                <span className="block mb-1">
+                  {userBadge.badges.image_url ? (
+                    <img src={userBadge.badges.image_url} alt={userBadge.badges.name} className="w-8 h-8 object-contain mx-auto" />
+                  ) : (
+                    <span className="text-2xl">{userBadge.badges.icon}</span>
+                  )}
+                </span>
                 <span className="text-xs font-medium text-foreground block">
                   {userBadge.badges.name}
                 </span>

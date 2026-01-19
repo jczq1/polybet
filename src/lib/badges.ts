@@ -24,6 +24,7 @@ export interface Badge {
   name: string
   description: string
   icon: string
+  image_url?: string | null
   condition_type: string
   threshold: number
   is_active: boolean

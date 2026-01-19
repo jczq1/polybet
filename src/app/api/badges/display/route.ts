@@ -21,12 +21,12 @@ export async function GET(request: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // Query directly to include description
+    // Query directly to include description and image_url
     const { data, error } = await supabaseAdmin
       .from('user_badges')
       .select(`
         display_order,
-        badges (id, name, icon, description)
+        badges (id, name, icon, image_url, description)
       `)
       .eq('user_id', userId)
       .not('display_order', 'is', null)
@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
       id: ub.badges.id,
       name: ub.badges.name,
       icon: ub.badges.icon,
+      image_url: ub.badges.image_url,
       description: ub.badges.description,
       display_order: ub.display_order
     }))
