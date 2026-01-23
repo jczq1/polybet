@@ -88,51 +88,23 @@ export function UserBadges({ userId }: UserBadgesProps) {
                 onMouseEnter={() => setHoveredBadge(badge.id)}
                 onMouseLeave={() => setHoveredBadge(null)}
               >
-                {/* Badge Icon */}
-                <div
-                  className={`
-                    flex flex-col items-center justify-center p-2 rounded-lg border aspect-square
-                    transition-all duration-200 cursor-default
-                    ${isEarned
-                      ? 'bg-secondary border-primary/30 hover:border-primary/60'
-                      : 'bg-muted/30 border-border opacity-40 grayscale'
-                    }
-                  `}
-                >
-                  <span className={`text-2xl ${isEarned ? '' : 'opacity-60'}`}>
-                    {badge.icon}
-                  </span>
-                </div>
-
-                {/* Hover Tooltip */}
-                {isHovered && (
-                  <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 pointer-events-none">
-                    <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-center">
-                      <div className="text-2xl mb-1">{badge.icon}</div>
-                      <p className={`font-medium text-sm ${isEarned ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {badge.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {badge.description}
-                      </p>
-                      {isEarned && earned && (
-                        <p className="text-[10px] text-accent mt-2 border-t border-border pt-2">
-                          Earned {new Date(earned.earned_at).toLocaleDateString()}
-                        </p>
-                      )}
-                      {!isEarned && (
-                        <p className="text-[10px] text-muted-foreground mt-2 border-t border-border pt-2 italic">
-                          Locked
-                        </p>
-                      )}
-                      {/* Tooltip arrow */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                        <div className="border-8 border-transparent border-t-border" />
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -mt-px border-[7px] border-transparent border-t-card" />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <span className="mb-1 group-hover:scale-110 transition-transform">
+                  {userBadge.badges.image_url ? (
+                    <img
+                      src={userBadge.badges.image_url}
+                      alt={userBadge.badges.name}
+                      className="w-8 h-8 object-contain"
+                    />
+                  ) : (
+                    <span className="text-3xl">{userBadge.badges.icon}</span>
+                  )}
+                </span>
+                <span className="text-xs font-medium text-foreground text-center">
+                  {userBadge.badges.name}
+                </span>
+                <span className="text-[10px] text-muted-foreground mt-1">
+                  {new Date(userBadge.earned_at).toLocaleDateString()}
+                </span>
               </div>
             )
           })}
